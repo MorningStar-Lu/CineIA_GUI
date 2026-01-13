@@ -1,8 +1,9 @@
 cmake_minimum_required(VERSION 3.10)
-project(CineIA_CLI VERSION 0.2.2)
+project(CineIA_CLI VERSION 0.3.0)
 
 # Init CMake
 cmake_policy(SET CMP0048 NEW)
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_MACOSX_RPATH ON)
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
@@ -15,12 +16,9 @@ set(IABLib_HEADER_PATH
 )
 
 # Include asdcplib library
+set(WITHOUT_SSL ON)
+set(WITHOUT_XML ON)
 add_subdirectory(external/asdcplib)
-if(WIN32)
-    add_definitions(/DKM_WIN32)
-elseif(UNIX)
-    add_definitions(/DASDCP_PLATFORM=\"unix\")
-endif()
 set(ASDCP_HEADER_PATH
     external/asdcplib/src
 )
