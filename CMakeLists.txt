@@ -5,7 +5,10 @@ project(CineIA_CLI VERSION 0.3.0)
 cmake_policy(SET CMP0048 NEW)
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_MACOSX_RPATH ON)
+set(CMAKE_SKIP_BUILD_RPATH OFF)
+set(CMAKE_BUILD_WITH_INSTALL_RPATH OFF)
+set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH ON)
 
 # Include iab-renderer library
 add_subdirectory(external/iab-renderer)
@@ -48,13 +51,6 @@ target_compile_definitions(cineia PRIVATE
     PROJECT_VERSION_MINOR=${PROJECT_VERSION_MINOR}
     PROJECT_VERSION_PATCH=${PROJECT_VERSION_PATCH}
 )
-
-# macOS linking properties
-if(APPLE)
-    set_target_properties(cineia PROPERTIES
-        INSTALL_RPATH "@executable_path/../lib"
-    )
-endif(APPLE)
 
 # Set install rules
 install(TARGETS cineia RUNTIME DESTINATION bin)
