@@ -72,8 +72,8 @@ CineIA_CLI is a CMake project. Just follow the usage of CMake. No extra dependen
 
 You may have to do some quick fixes to compile the project properly with the latest version of MSVC on Windows:
 
-- Comment or delete line 34 ```#include <cvt/wstring>``` in [StringUtils.cpp](/external/iab-renderer/src/lib/commonstream/utils/StringUtils.cpp);
-- Change the encoding of [stream_helper.hpp](/external/indicators/include/indicators/details/stream_helper.hpp) to UTF-8 with BOM.
+- Comment or delete line 34 ```#include <cvt/wstring>``` in [StringUtils.cpp](https://github.com/DTSProAudio/iab-renderer/blob/1232c550aac4be4d4106605d30bd0eb798b3f4bf/src/lib/commonstream/utils/StringUtils.cpp) in submodule ```external/iab-renderer```;
+- Change the encoding of [stream_helper.hpp](https://github.com/p-ranav/indicators/blob/222382c3a6abbce32503792c59826063660ddb56/include/indicators/details/stream_helper.hpp) to UTF-8 with BOM in submodule ```external/indicators```.
 
 *Tip: Remember to clone the git repository recursively (```git clone --recursive https://github.com/izwb003/CineIA_CLI.git```), as the repository contains submodules.*
 
