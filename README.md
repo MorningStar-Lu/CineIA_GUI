@@ -70,6 +70,11 @@ Next, in the cinema where you need to play the content, simply load the DCP and 
 
 CineIA_CLI is a CMake project. Just follow the usage of CMake. No extra dependencies are required.
 
+You may have to do some quick fixes to compile the project properly with the latest version of MSVC on Windows:
+
+- Comment or delete line 34 ```#include <cvt/wstring>``` in [StringUtils.cpp](/external/iab-renderer/src/lib/commonstream/utils/StringUtils.cpp);
+- Change the encoding of [stream_helper.hpp](/external/indicators/include/indicators/details/stream_helper.hpp) to UTF-8 with BOM.
+
 *Tip: Remember to clone the git repository recursively (```git clone --recursive https://github.com/izwb003/CineIA_CLI.git```), as the repository contains submodules.*
 
 ### Why IMF IAB?

@@ -67,6 +67,11 @@ cineia "IMF IAB文件名或文件路径.mxf" "DCP IAB文件名或文件路径.mx
 
 CineIA_CLI是一个CMake项目。按CMake使用方法对待即可。不需要额外的依赖。
 
+您可能需要做一些快速的修正以正确地在Windows中使用最新版本的MSVC编译该项目：
+
+- 注释或删除[StringUtils.cpp](/external/iab-renderer/src/lib/commonstream/utils/StringUtils.cpp)的第34行```#include <cvt/wstring>```；
+- 将[stream_helper.hpp](/external/indicators/include/indicators/details/stream_helper.hpp)的文件编码修改为UTF-8 with BOM。
+
 *提示：由于存储库包含子模块，请递归地克隆项目（```git clone --recursive https://github.com/izwb003/CineIA_CLI.git```）。*
 
 ### 为什么使用IMF IAB格式？
