@@ -3,6 +3,7 @@ project(CineIA_CLI VERSION 0.3.0)
 
 # Init CMake
 cmake_policy(SET CMP0048 NEW)
+set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
 set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_SKIP_BUILD_RPATH OFF)
@@ -20,6 +21,9 @@ set(IABLib_HEADER_PATH
 # Include asdcplib library
 set(WITHOUT_SSL ON)
 set(WITHOUT_XML ON)
+if(WIN32)
+    add_definitions(/DKM_WIN32)
+endif(WIN32)
 add_subdirectory(external/asdcplib)
 set(ASDCP_HEADER_PATH
     external/asdcplib/src
