@@ -34,5 +34,9 @@
 # Build Folders
 build
 
+# IDE Files
+.vscode
+.idea
+
 # macOS Stuffs
 .DS_Store

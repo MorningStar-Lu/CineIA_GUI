@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2024. Steven Song (izwb-003)
+ Copyright (c) 2026. Steven Song (izwb-003)
  Permission is hereby granted, free of charge, to any person obtaining a copy
  of this software and associated documentation files (the "Software"), to deal
  in the Software without restriction, including without limitation the rights
@@ -146,7 +146,7 @@ CineIA::iabError CineIA::reassembleIAB(std::istream *iInputStream, std::vector<c
     IABMetadataIDType objectDefinitionMetaIDCounter = 1;
 
     /*
-     * In a real IAB Application Profile 1 (or DCP Dolby Atmos) bitstream, there will not appear AudioDataID = 0.
+     * In a real IAB Application Profile 1 bitstream, there will not appear AudioDataID = 0.
      * So we have to fill those elements which uses AudioDataID = 0 with Audio data that has no sound.
      * The following two variables are used to store a counter to mark which AudioDataID the current element should use.
      */
@@ -190,7 +190,7 @@ CineIA::iabError CineIA::reassembleIAB(std::istream *iInputStream, std::vector<c
             IABBedDefinition* oBedDefinition = new IABBedDefinition(frameFrameRate);
 
             // Copy necessary BedDefinition settings
-            IABMetadataIDType bedDefinitionMetaID = 0;  // * IAB Application Profile 1 or Dolby Atmos' constraint limits BedDefinition's MetaID to 0.
+            IABMetadataIDType bedDefinitionMetaID = 0;  // * IAB Application Profile 1's constraint limits BedDefinition's MetaID to 0.
             uint1_t bedDefinitionIsConditionalBed;
             IABUseCaseType bedDefinitionBedUseCase;
 
@@ -425,7 +425,7 @@ CineIA::iabError CineIA::reassembleIABDolby(std::istream *iInputStream, std::vec
     IABMetadataIDType objectDefinitionMetaIDCounter = 1;
 
     /*
-     * In a real IAB Application Profile 1 (or DCP Dolby Atmos) bitstream, there will not appear AudioDataID = 0.
+     * In a real IAB Application Profile 1 bitstream, there will not appear AudioDataID = 0.
      * So we have to fill those elements which uses AudioDataID = 0 with Audio data that has no sound.
      * The following two variables are used to store a counter to mark which AudioDataID the current element should use.
      */
@@ -469,7 +469,7 @@ CineIA::iabError CineIA::reassembleIABDolby(std::istream *iInputStream, std::vec
             IABBedDefinition* oBedDefinition = new IABBedDefinition(frameFrameRate);
 
             // Copy necessary BedDefinition settings
-            IABMetadataIDType bedDefinitionMetaID = 0;  // * IAB Application Profile 1 or Dolby Atmos' constraint limits BedDefinition's MetaID to 0.
+            IABMetadataIDType bedDefinitionMetaID = 0;  // * IAB Application Profile 1's constraint limits BedDefinition's MetaID to 0.
             uint1_t bedDefinitionIsConditionalBed;
             IABUseCaseType bedDefinitionBedUseCase;
 

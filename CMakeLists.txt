@@ -1,11 +1,15 @@
 cmake_minimum_required(VERSION 3.10)
-project(CineIA_CLI VERSION 0.2.2)
+project(CineIA_CLI VERSION 0.3.0)
 
 # Init CMake
 cmake_policy(SET CMP0048 NEW)
+set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
 set(CMAKE_CXX_STANDARD 11)
-set(CMAKE_MACOSX_RPATH ON)
-set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+set(CMAKE_SKIP_BUILD_RPATH OFF)
+set(CMAKE_BUILD_WITH_INSTALL_RPATH OFF)
+set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH ON)
 
 # Include iab-renderer library
 add_subdirectory(external/iab-renderer)
@@ -15,12 +19,12 @@ set(IABLib_HEADER_PATH
 )
 
 # Include asdcplib library
-add_subdirectory(external/asdcplib)
+set(WITHOUT_SSL ON)
+set(WITHOUT_XML ON)
 if(WIN32)
     add_definitions(/DKM_WIN32)
-elseif(UNIX)
-    add_definitions(/DASDCP_PLATFORM=\"unix\")
-endif()
+endif(WIN32)
+add_subdirectory(external/asdcplib)
 set(ASDCP_HEADER_PATH
     external/asdcplib/src
 )
