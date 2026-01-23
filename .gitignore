@@ -1,0 +1,24 @@
+
+# Dependencies
+node_modules
+.pnp
+.pnp.js
+
+# Testing
+coverage
+
+# Production
+dist
+build
+release
+
+# Misc
+.DS_Store
+.env
+.npm
+*.log
+
+# IDE
+.vscode
+.idea
+*.swp

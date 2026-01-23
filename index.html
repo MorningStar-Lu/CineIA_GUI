@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CineIA GUI</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="logo">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                    stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect>
+                    <line x1="7" y1="2" x2="7" y2="22"></line>
+                    <line x1="17" y1="2" x2="17" y2="22"></line>
+                    <line x1="2" y1="12" x2="22" y2="12"></line>
+                    <line x1="2" y1="7" x2="7" y2="7"></line>
+                    <line x1="2" y1="17" x2="7" y2="17"></line>
+                    <line x1="17" y1="17" x2="22" y2="17"></line>
+                    <line x1="17" y1="7" x2="22" y2="7"></line>
+                </svg>
+                <span>CineIA GUI</span>
+            </div>
+            <div style="display: flex; gap: 15px; align-items: center;">
+                <div class="status-indicator" data-i18n="status-ready">Ready</div>
+                <button id="btn-lang" class="btn text-only"
+                    style="padding: 4px 8px; font-size: 12px; font-weight: 600;">EN</button>
+                <button id="btn-help" class="btn text-only" style="padding: 4px 8px; font-size: 12px; font-weight: 600;"
+                    data-i18n="btn-help">说明</button>
+                <button id="btn-license" class="btn text-only"
+                    style="padding: 4px 8px; font-size: 12px; font-weight: 600;" data-i18n="btn-license">版权</button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+
+            <!-- File Selection Section -->
+            <section class="card file-selection">
+                <h2 data-i18n="section-files">文件选择</h2>
+
+                <div class="input-group">
+                    <label data-i18n="label-input">输入文件 (IMF IAB .mxf)</label>
+                    <div class="file-input-wrapper">
+                        <input type="text" id="input-path" placeholder="请选择或拖入 .mxf 文件" readonly
+                            data-i18n-placeholder="placeholder-input">
+                        <button id="btn-select-input" class="btn secondary" data-i18n="btn-select-file">选择文件</button>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label data-i18n="label-output">输出文件 (DCP IAB .mxf)</label>
+                    <div class="file-input-wrapper">
+                        <input type="text" id="output-path" placeholder="设置输出路径" readonly
+                            data-i18n-placeholder="placeholder-output">
+                        <button id="btn-select-output" class="btn secondary" data-i18n="btn-select-path">选择路径</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Options Section -->
+            <section class="card options-panel">
+                <h2 data-i18n="section-options">转换选项</h2>
+                <div class="options-grid">
+                    <div class="checkbox-wrapper">
+                        <input type="checkbox" id="no-copy-preamble">
+                        <label for="no-copy-preamble">
+                            <span class="label-text">No Copy Preamble</span>
+                            <span class="label-desc" data-i18n="desc-no-copy">不复制 PreambleValue，尝试修复异常比特流</span>
+                        </label>
+                    </div>
+
+                    <div class="checkbox-wrapper">
+                        <input type="checkbox" id="force-dolby">
+                        <label for="force-dolby">
+                            <span class="label-text">Force Dolby Constraint</span>
+                            <span class="label-desc" data-i18n="desc-force-dolby">强制符合杜比约束 (可能导致错误)</span>
+                        </label>
+                    </div>
+
+                    <div class="number-input-wrapper">
+                        <label for="set-channels">
+                            Channels
+                            <div class="tooltip" id="tooltip-channels"
+                                data-tip="设置 MXF AtmosDescriptor 记录的音床声道数 (Bed Channels)。&#10;除非遇到兼容性问题，否则请勿修改。">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                                </svg>
+                            </div>
+                        </label>
+                        <input type="number" id="set-channels" placeholder="Default">
+                    </div>
+
+                    <div class="number-input-wrapper">
+                        <label for="set-objects">
+                            Objects
+                            <div class="tooltip" id="tooltip-objects"
+                                data-tip="设置 MXF AtmosDescriptor 记录的声音对象数 (Objects)。&#10;除非遇到兼容性问题，否则请勿修改。">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                                </svg>
+                            </div>
+                        </label>
+                        <input type="number" id="set-objects" placeholder="Default">
+                    </div>
+                </div>
+            </section>
+
+            <!-- Action Section -->
+            <div class="action-area">
+                <button id="btn-start" class="btn primary large" data-i18n="btn-start">开始转换</button>
+
+                <div id="progress-container" class="progress-container hidden">
+                    <div class="progress-info">
+                        <span id="progress-status" data-i18n="status-preparing">准备中...</span>
+                        <span id="progress-percent">0%</span>
+                    </div>
+                    <div class="progress-bar-bg">
+                        <div id="progress-bar-fill" class="progress-bar-fill" style="width: 0%"></div>
+                    </div>
+                    <div class="progress-details">
+                        <span id="progress-time">--:--</span>
+                        <span id="progress-frame">Frame: 0/0</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Logs Section -->
+            <section class="log-section">
+                <div class="logs-header">
+                    <h2 data-i18n="section-logs">运行日志</h2>
+                    <button id="btn-clear-logs" class="btn text-only" data-i18n="btn-clear">清除</button>
+                </div>
+                <div id="log-terminal" class="terminal">
+                    <div class="log-line info" data-i18n="log-waiting">等待开始...</div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal-overlay hidden">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 data-i18n="modal-settings">设置</h3>
+                <button id="btn-close-settings" class="btn text-only">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group">
+                    <label data-i18n="label-cli-path">CineIA CLI 路径</label>
+                    <div class="file-input-wrapper">
+                        <input type="text" id="settings-cineia-path" placeholder="e.g. /usr/local/bin/cineia">
+                    </div>
+                    <p class="hint" data-i18n="hint-cli-path">如果系统找不到 `cineia` 命令，请在此指定其完整路径。</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="btn-save-settings" class="btn primary" data-i18n="btn-save">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Readme Modal -->
+    <div id="readme-modal" class="modal-overlay hidden">
+        <div class="modal" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3 id="readme-title">Help</h3>
+                <button id="btn-close-readme" class="btn text-only">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body" style="font-size: 13px; color: var(--text-secondary); line-height: 1.6;">
+                <div id="readme-content-cn" class="hidden">
+                    <h4 style="color: var(--text-primary); margin-bottom: 8px;">使用说明</h4>
+                    <p>CineIA GUI 是一个用于将 IMF IAB (.mxf) 转换为 DCP IAB (.mxf) 的工具。</p>
+                    <ol style="padding-left: 20px; margin: 10px 0;">
+                        <li><strong>输入文件</strong>: 点击“选择文件”或直接将 .mxf 文件拖入输入框。</li>
+                        <li><strong>输出路径</strong>: 系统会自动根据输入文件生成输出路径，您也可以点击“选择路径”手动更改。</li>
+                        <li><strong>参数设置</strong>:
+                            <ul style="padding-left: 20px; margin: 5px 0;">
+                                <li><strong>No Copy Preamble</strong>: 不复制前导符 (用于修复某些可能有问题的流)。</li>
+                                <li><strong>Force Dolby</strong>: 强制应用杜比约束 (仅在确实且清楚自己在做什么时勾选)。</li>
+                                <li><strong>Channels</strong>: 默认 10 (对应 7.1.2 布局)。</li>
+                                <li><strong>Objects</strong>: 默认 118。</li>
+                            </ul>
+                        </li>
+                        <li><strong>开始转换</strong>: 点击按钮开始，下方进度条会显示实时进度。</li>
+                    </ol>
+                </div>
+                <div id="readme-content-en" class="hidden">
+                    <h4 style="color: var(--text-primary); margin-bottom: 8px;">Instructions</h4>
+                    <p>CineIA GUI is a tool for converting IMF IAB (.mxf) to DCP IAB (.mxf).</p>
+                    <ol style="padding-left: 20px; margin: 10px 0;">
+                        <li><strong>Input File</strong>: Click "Select File" or drag & drop an .mxf file.</li>
+                        <li><strong>Output Path</strong>: Automatically generated based on input. Click "Select Path" to
+                            change.</li>
+                        <li><strong>Parameters</strong>:
+                            <ul style="padding-left: 20px; margin: 5px 0;">
+                                <li><strong>No Copy Preamble</strong>: Do not copy preamble values (fixes some bad
+                                    streams).</li>
+                                <li><strong>Force Dolby</strong>: Enforce Dolby constraints (Use with caution).</li>
+                                <li><strong>Channels</strong>: Default 10 (7.1.2).</li>
+                                <li><strong>Objects</strong>: Default 118.</li>
+                            </ul>
+                        </li>
+                        <li><strong>Start</strong>: Click "Start Conversion" to begin. Progress is shown below.</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- License Modal -->
+    <div id="license-modal" class="modal-overlay hidden">
+        <div class="modal" style="max-width: 600px;">
+            <div class="modal-header">
+                <h3 data-i18n="modal-license">版权声明</h3>
+                <button id="btn-close-license" class="btn text-only">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body"
+                style="font-size: 12px; color: var(--text-secondary); line-height: 1.5; overflow-y: auto; max-height: 400px;">
+                <p style="margin-bottom: 10px; color: var(--text-primary); font-weight: 600;">CineIA GUI</p>
+                <div id="license-content"
+                    style=" font-family: 'SF Mono', monospace; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px;">
+                    MIT License
+
+                    Copyright (c) 2026 IZWB-003
+
+                    Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+                    associated documentation files (the "Software"), to deal in the Software without restriction,
+                    including without limitation the rights to use, copy, modify, merge, publish, distribute,
+                    sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+                    furnished to do so, subject to the following conditions:
+
+                    The above copyright notice and this permission notice shall be included in all copies or substantial
+                    portions of the Software.
+
+                    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+                    NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+                    NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES
+                    OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+                    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="renderer.js"></script>
+</body>
+
+</html>
