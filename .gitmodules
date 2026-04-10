@@ -1,0 +1,3 @@
+[submodule "vendor/CineIA_CLI"]
+	path = vendor/CineIA_CLI
+	url = https://github.com/izwb003/CineIA_CLI.git

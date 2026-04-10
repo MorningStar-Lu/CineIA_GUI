@@ -5,6 +5,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "build:cli:mac": "./scripts/build-cli-mac.sh",
     "pack": "electron-builder --dir",
     "dist": "electron-builder",
     "test": "echo \"Error: no test specified\" && exit 1"

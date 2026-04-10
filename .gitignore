@@ -11,6 +11,7 @@ coverage
 dist
 build
 release
+vendor/CineIA_CLI/build
 
 # Misc
 .DS_Store
