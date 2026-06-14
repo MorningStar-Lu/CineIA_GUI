@@ -1,25 +1,25 @@
-
 # Dependencies
-node_modules
-.pnp
-.pnp.js
+node_modules/
 
-# Testing
-coverage
+# Build outputs
+dist/
+build/
+CineIA_CLI_Source/build/
+release/
+vendor/CineIA_CLI/build/
 
-# Production
-# dist
-build
-release
-vendor/CineIA_CLI/build
-
-# Misc
+# OS files
 .DS_Store
-.env
-.npm
-*.log
+Thumbs.db
 
 # IDE
-.vscode
-.idea
+.vscode/
+.idea/
 *.swp
+*.swo
+
+# Logs
+*.log
+
+# Electron
+out/

@@ -1,7 +1,7 @@
 {
   "name": "cineia_gui",
   "version": "1.0.1",
-  "description": "",
+  "description": "GUI for converting IMF IAB (.mxf) to DCP IAB (.mxf)",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -42,8 +42,8 @@
     }
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "IZWB-003",
+  "license": "MIT",
   "devDependencies": {
     "electron": "^40.0.0",
     "electron-builder": "^26.4.0"
