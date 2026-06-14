@@ -2,6 +2,8 @@ const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 
+let currentChild = null; // Track running child process for cancellation
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 900,
@@ -64,12 +66,24 @@ ipcMain.on('run-cineia', (event, args) => {
   if (options.noCopyPreamble) cmdArgs.push('-n');
   if (options.forceDolby) cmdArgs.push('-f');
   if (options.channels) {
+    const ch = parseInt(options.channels, 10);
+    if (isNaN(ch) || ch < 1 || ch > 256) {
+      event.reply('cineia-output', 'Error: Invalid channel count (must be 1-256).\n');
+      event.reply('cineia-exit', -1);
+      return;
+    }
     cmdArgs.push('-c');
-    cmdArgs.push(options.channels);
+    cmdArgs.push(String(ch));
   }
   if (options.objects) {
+    const obj = parseInt(options.objects, 10);
+    if (isNaN(obj) || obj < 1 || obj > 256) {
+      event.reply('cineia-output', 'Error: Invalid object count (must be 1-256).\n');
+      event.reply('cineia-exit', -1);
+      return;
+    }
     cmdArgs.push('-o');
-    cmdArgs.push(options.objects);
+    cmdArgs.push(String(obj));
   }
 
   cmdArgs.push(inputPath);
@@ -103,7 +117,8 @@ ipcMain.on('run-cineia', (event, args) => {
   event.reply('cineia-output', `Running: ${command} ${cmdArgs.join(' ')}\n`);
 
   try {
-    const child = spawn(command, cmdArgs);
+    currentChild = spawn(command, cmdArgs);
+    const child = currentChild;
 
     child.stdout.on('data', (data) => {
       event.reply('cineia-output', data.toString());
@@ -114,6 +129,7 @@ ipcMain.on('run-cineia', (event, args) => {
     });
 
     child.on('error', (err) => {
+      currentChild = null;
       if (err.code === 'ENOENT') {
         event.reply('cineia-output', `CRITICAL ERROR: Could not find '${command}' executable.\nPlease explicitly set the CineIA Path in Settings.\n`);
       } else {
@@ -123,10 +139,21 @@ ipcMain.on('run-cineia', (event, args) => {
     });
 
     child.on('close', (code) => {
+      currentChild = null;
       event.reply('cineia-exit', code);
     });
   } catch (e) {
     event.reply('cineia-output', `Exception: ${e.message}\n`);
     event.reply('cineia-exit', -1);
+  }
+});
+
+// IPC: Cancel running CineIA process
+ipcMain.on('cancel-cineia', (event) => {
+  if (currentChild) {
+    currentChild.kill('SIGTERM');
+    currentChild = null;
+    event.reply('cineia-output', 'Cancelled by user.\n');
+    event.reply('cineia-exit', -999);
   }
 });
