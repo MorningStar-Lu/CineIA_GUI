@@ -49,6 +49,7 @@ const translations = {
         'status-ready': 'Ready',
         'btn-help': 'Help',
         'btn-license': 'License',
+        'btn-settings': 'Settings',
         'modal-help': 'Instructions',
         'modal-license': 'License / Copyright',
         'section-files': 'File Selection',
@@ -60,6 +61,7 @@ const translations = {
         'desc-no-copy': 'Do not copy PreambleValue, attempt to fix abnormal bitstream',
         'desc-force-dolby': 'Force Dolby Constraint (Can cause errors)',
         'btn-start': 'Start Conversion',
+        'btn-cancel': 'Cancel',
         'btn-converting': 'Converting...',
         'status-preparing': 'Preparing...',
         'status-processing': 'Processing...',
@@ -82,6 +84,7 @@ const translations = {
         'log-success': 'Conversion Successful',
         'log-finished': 'Job Finished! (Exit Code: ',
         'log-error-generic': 'Job ended with potential errors. (Exit Code: ',
+        'log-cancelled': 'Conversion cancelled by user.',
         'time-elapsed': 'Elapsed: ',
         'time-remaining': 'Remaining: '
     },
@@ -89,6 +92,7 @@ const translations = {
         'status-ready': 'Ready',
         'btn-help': '说明',
         'btn-license': '版权',
+        'btn-settings': '设置',
         'modal-help': '使用说明',
         'modal-license': '版权声明',
         'section-files': '文件选择',
@@ -100,6 +104,7 @@ const translations = {
         'desc-no-copy': '不复制 PreambleValue，尝试修复异常比特流',
         'desc-force-dolby': '强制符合杜比约束 (可能导致错误)',
         'btn-start': '开始转换',
+        'btn-cancel': '取消',
         'btn-converting': '转换中...',
         'status-preparing': '准备中...',
         'status-processing': '处理中...',
@@ -122,6 +127,7 @@ const translations = {
         'log-success': '转换成功',
         'log-finished': '任务完成! (Exit Code: ',
         'log-error-generic': '任务结束，但在过程中似乎遇到了错误。(Exit Code: ',
+        'log-cancelled': '转换已被用户取消。',
         'time-elapsed': '已用: ',
         'time-remaining': '剩余: '
     }
@@ -229,7 +235,13 @@ if (modalLicense) {
     });
 }
 
-// Settings Logic (Preserved but inaccessible via UI for now)
+// Settings Logic
+const btnSettings = document.getElementById('btn-settings');
+if (btnSettings) {
+    btnSettings.addEventListener('click', () => {
+        modalSettings.classList.remove('hidden');
+    });
+}
 if (btnCloseSettings) btnCloseSettings.addEventListener('click', () => modalSettings.classList.add('hidden'));
 if (modalSettings) {
     modalSettings.addEventListener('click', (e) => {
@@ -257,13 +269,53 @@ btnSelectInput.addEventListener('click', async () => {
 
         // Auto-suggest output path
         if (!outputPathEl.value) {
-            const pathParts = filePath.split('.');
-            pathParts.pop(); // remove extension
-            const defaultOutput = pathParts.join('.') + '_dcp.mxf';
+            const lastDot = filePath.lastIndexOf('.');
+            const lastSep = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'));
+            const baseName = lastDot > lastSep ? filePath.substring(0, lastDot) : filePath;
+            const defaultOutput = baseName + '_dcp.mxf';
             outputPathEl.value = defaultOutput;
         }
     }
 });
+
+// Drag and Drop support for input file
+const inputWrapper = document.querySelector('.file-selection .file-input-wrapper');
+if (inputWrapper) {
+    inputWrapper.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        inputWrapper.style.borderColor = 'var(--accent-primary)';
+        inputWrapper.style.borderStyle = 'dashed';
+    });
+
+    inputWrapper.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        inputWrapper.style.borderColor = '';
+        inputWrapper.style.borderStyle = '';
+    });
+
+    inputWrapper.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        inputWrapper.style.borderColor = '';
+        inputWrapper.style.borderStyle = '';
+
+        const file = e.dataTransfer.files[0];
+        if (file && file.path && file.path.toLowerCase().endsWith('.mxf')) {
+            const t = translations[currentLang];
+            inputPathEl.value = file.path;
+            addLog(`${t['log-input-selected']}${file.path}`, 'info');
+
+            if (!outputPathEl.value) {
+                const lastDot = file.path.lastIndexOf('.');
+                const lastSep = Math.max(file.path.lastIndexOf('/'), file.path.lastIndexOf('\\'));
+                const baseName = lastDot > lastSep ? file.path.substring(0, lastDot) : file.path;
+                outputPathEl.value = baseName + '_dcp.mxf';
+            }
+        }
+    });
+}
 
 btnSelectOutput.addEventListener('click', async () => {
     const t = translations[currentLang];
@@ -279,11 +331,15 @@ btnClearLogs.addEventListener('click', () => {
 });
 
 btnStart.addEventListener('click', () => {
-    if (isRunning) return;
-
+    const t = translations[currentLang];
     const inputPath = inputPathEl.value;
     const outputPath = outputPathEl.value;
-    const t = translations[currentLang];
+
+    // If currently running, cancel instead
+    if (isRunning) {
+        window.electronAPI.cancelCineia();
+        return;
+    }
 
     if (!inputPath || !outputPath) {
         addLog(t['log-error-paths'], 'error');
@@ -298,9 +354,9 @@ btnStart.addEventListener('click', () => {
     };
 
     isRunning = true;
-    btnStart.disabled = true;
-    btnStart.textContent = t['btn-converting'];
-    btnStart.style.opacity = '0.7';
+    btnStart.disabled = false; // Keep enabled for cancel
+    btnStart.textContent = t['btn-cancel'];
+    btnStart.classList.add('danger');
 
     // Clear logs for new run
     terminal.innerHTML = '';
@@ -370,7 +426,7 @@ window.electronAPI.onCineiaOutput((data) => {
 
             const current = parseInt(currentFrame);
             const total = parseInt(totalFrame);
-            const percent = Math.round((current / total) * 100);
+            const percent = current >= total ? 100 : Math.floor((current / total) * 100);
 
             // Parse timeInfo
             // timeInfo ex: 00m:05s<00m:18s
@@ -402,9 +458,11 @@ window.electronAPI.onCineiaExit((code) => {
     const t = translations[currentLang];
     btnStart.disabled = false;
     btnStart.textContent = t['btn-start'];
-    btnStart.style.opacity = '1';
+    btnStart.classList.remove('danger');
 
-    if (code === 0) {
+    if (code === -999) {
+        addLog(`🚫 ${t['log-cancelled']}`, 'info');
+    } else if (code === 0) {
         addLog(`${t['log-finished']}${code})`, 'info');
         // Simple success notification within terminal
         addLog(`✅ ${t['log-success']}`, 'normal');
