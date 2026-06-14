@@ -41,8 +41,6 @@ namespace CineIA {
 
     iabError getIABFrameInfo(std::istream *iInputStream, iabFrameInfo &oIABFrameInfo);
 
-    void showError(iabError error);
-
     iabError reassembleIAB(std::istream *iInputStream, std::vector<char> &oOutputBuffer, uint32_t &oOutputLength);
 
     iabError reassembleIABDolby(std::istream *iInputStream, std::vector<char> &oOutputBuffer, uint32_t &oOutputLength);

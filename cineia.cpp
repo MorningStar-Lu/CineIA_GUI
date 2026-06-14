@@ -20,6 +20,7 @@
  */
 
 #include "cineia.h"
+#include <memory>
 
 // Because provided APIs of IABLib are too simple, we choose not to use them.
 #include <parser/IABParser.h>
@@ -40,6 +41,14 @@ static const int dlcSampleCountList[10][2] = {
     {2002, 4004}
 };
 
+// Safe accessor to prevent array out-of-bounds
+static int getDLCSampleCount(int frameRateIdx, int sampleRateIdx) {
+    if (frameRateIdx < 0 || frameRateIdx >= 10 || sampleRateIdx < 0 || sampleRateIdx >= 2) {
+        return 0;
+    }
+    return dlcSampleCountList[frameRateIdx][sampleRateIdx];
+}
+
 CineIA::iabError CineIA::getIABFrameInfo(std::istream *iInputStream, iabFrameInfo &oIABFrameInfo) {
     iabError error = kIABNoError;
     IABParser parser(iInputStream);
@@ -53,6 +62,14 @@ CineIA::iabError CineIA::getIABFrameInfo(std::istream *iInputStream, iabFrameInf
     parsedFrame->GetMaxRendered(oIABFrameInfo.maxRendered);
     parsedFrame->GetFrameRate(oIABFrameInfo.frameRate);
     parsedFrame->GetBitDepth(oIABFrameInfo.bitDepth);
+
+    // Validate frame rate and sample rate are within expected enum bounds
+    // to prevent dlcSampleCountList[] array out-of-bounds access
+    int frIdx = static_cast<int>(oIABFrameInfo.frameRate);
+    int srIdx = static_cast<int>(oIABFrameInfo.sampleRate);
+    if (frIdx < 0 || frIdx > 9 || srIdx < 0 || srIdx > 1) {
+        return kIABNoError;  // Caller should check frameInfo validity
+    }
 
     std::vector<IABElement*> subElements;
     parsedFrame->GetSubElements(subElements);
@@ -84,28 +101,24 @@ CineIA::iabError CineIA::getIABFrameInfo(std::istream *iInputStream, iabFrameInf
     return error;
 }
 
-void CineIA::showError(iabError error) {
-    if(error != kIABNoError) {
-        std::cout<<error;
-        exit(error);
-    }
-}
-
-CineIA::iabError CineIA::reassembleIAB(std::istream *iInputStream, std::vector<char> &oOutputBuffer, uint32_t &oOutputLength) {
+// Internal shared reassembly logic
+static CineIA::iabError reassembleIABCore(std::istream *iInputStream, std::vector<char> &oOutputBuffer, uint32_t &oOutputLength, bool forceDolby) {
     // Error variable
     iabError error = kIABNoError;
 
-    // Build IMF parser and DCP packer
-    IABParser* parser = new IABParser(iInputStream);
-    IABPacker* packer = new IABPacker();
+    // Build IMF parser and DCP packer (RAII - auto cleanup on early return)
+    auto parser = std::make_unique<IABParser>(iInputStream);
+    auto packer = std::make_unique<IABPacker>();
 
-    // Build IMF IABFrame and DCP IABFrame pointer
-    IABFrameInterface* iIABFrame;
-    IABFrameInterface* oIABFrame;
+    // Build IMF IABFrame (owned by unique_ptr via GetIABFrameReleased)
+    // DCP IABFrame is owned by packer (raw pointer, do not delete)
+    IABFrameInterface* iIABFrame = nullptr;
+    IABFrameInterface* oIABFrame = nullptr;
 
     // Parse and get IMF IABFrame
     parser->ParseIABFrame();
     parser->GetIABFrameReleased(iIABFrame);
+    std::unique_ptr<IABFrameInterface> iIABFrameOwner(iIABFrame);
 
     // Get DCP IABFrame
     packer->GetIABFrame(oIABFrame);
@@ -123,7 +136,7 @@ CineIA::iabError CineIA::reassembleIAB(std::istream *iInputStream, std::vector<c
     iIABFrame->GetFrameRate(frameFrameRate);
     iIABFrame->GetMaxRendered(frameMaxRendered);
 
-    oIABFrame->SetVersion(frameVersion);
+    oIABFrame->SetVersion(forceDolby ? 1 : frameVersion);
     oIABFrame->SetSampleRate(frameSampleRate);
     oIABFrame->SetBitDepth(frameBitDepth);
     oIABFrame->SetFrameRate(frameFrameRate);
@@ -133,9 +146,9 @@ CineIA::iabError CineIA::reassembleIAB(std::istream *iInputStream, std::vector<c
     std::vector<IABElement*> iSubElements;
     std::vector<IABElement*> oSubElements;
 
-    std::vector<IABAudioDataDLC*> oAudioDataDLCs;
-    std::vector<IABBedDefinition*> oBedDefinitions;
-    std::vector<IABObjectDefinition*> oObjectDefinitions;
+    std::vector<std::unique_ptr<IABAudioDataDLC>> oAudioDataDLCs;
+    std::vector<std::unique_ptr<IABBedDefinition>> oBedDefinitions;
+    std::vector<std::unique_ptr<IABObjectDefinition>> oObjectDefinitions;
 
     iIABFrame->GetSubElements(iSubElements);
 
@@ -152,7 +165,7 @@ CineIA::iabError CineIA::reassembleIAB(std::istream *iInputStream, std::vector<c
      */
     IABAudioDataIDType bedDefinitionBedChannelAudioDataIDCounter = 100;
     IABAudioDataIDType objectDefinitionAudioDataIDCounter = 300;
-    std::vector<IABAudioDataDLC*>::iterator currentAudioDataDLCIterator;
+    std::vector<std::unique_ptr<IABAudioDataDLC>>::iterator currentAudioDataDLCIterator;
 
     for(IABElement* iSubElement : iSubElements) {
         // Copy AudioData elements
@@ -166,7 +179,7 @@ CineIA::iabError CineIA::reassembleIAB(std::istream *iInputStream, std::vector<c
             iAudioDataPCM->GetAudioDataID(audioDataID);
 
             // Build output AudioDataDLC element and set settings
-            IABAudioDataDLC* oAudioDataDLC = new IABAudioDataDLC(audioDataFrameRate, audioDataSampleRate, error);
+            auto oAudioDataDLC = std::make_unique<IABAudioDataDLC>(audioDataFrameRate, audioDataSampleRate, error);
             if(error != kIABNoError) return error;
             oAudioDataDLC->SetAudioDataID(audioDataID);
 
@@ -179,7 +192,7 @@ CineIA::iabError CineIA::reassembleIAB(std::istream *iInputStream, std::vector<c
             audioDataPCMSamples = nullptr;
 
             // Add to output AudioDataDLCs vector
-            oAudioDataDLCs.push_back(oAudioDataDLC);
+            oAudioDataDLCs.push_back(std::move(oAudioDataDLC));
         }
         // Copy BedDefinition Element
         else if(IABBedDefinition* iBedDefinition = dynamic_cast<IABBedDefinition*>(iSubElement)) {
@@ -187,7 +200,7 @@ CineIA::iabError CineIA::reassembleIAB(std::istream *iInputStream, std::vector<c
             currentAudioDataDLCIterator = oAudioDataDLCs.begin();
 
             // Build output BedDefinition element
-            IABBedDefinition* oBedDefinition = new IABBedDefinition(frameFrameRate);
+            auto oBedDefinition = std::make_unique<IABBedDefinition>(frameFrameRate);
 
             // Copy necessary BedDefinition settings
             IABMetadataIDType bedDefinitionMetaID = 0;  // * IAB Application Profile 1's constraint limits BedDefinition's MetaID to 0.
@@ -195,11 +208,12 @@ CineIA::iabError CineIA::reassembleIAB(std::istream *iInputStream, std::vector<c
             IABUseCaseType bedDefinitionBedUseCase;
 
             iBedDefinition->GetConditionalBed(bedDefinitionIsConditionalBed);
+            if (forceDolby) bedDefinitionIsConditionalBed = 0;
             iBedDefinition->GetBedUseCase(bedDefinitionBedUseCase);
 
             oBedDefinition->SetMetadataID(bedDefinitionMetaID);
             oBedDefinition->SetConditionalBed(bedDefinitionIsConditionalBed);
-            oBedDefinition->SetBedUseCase(bedDefinitionBedUseCase);
+            if (!forceDolby) oBedDefinition->SetBedUseCase(bedDefinitionBedUseCase);
 
             // Copy bed channels
             std::vector<IABChannel*> iBedDefinitionBedChannels;
@@ -226,19 +240,22 @@ CineIA::iabError CineIA::reassembleIAB(std::istream *iInputStream, std::vector<c
                 }
                 else if(channelAudioDataID == 0) {
                     channelAudioDataID = bedDefinitionBedChannelAudioDataIDCounter ++;
-                    IABAudioDataDLC* newAudioDataDLC = new IABAudioDataDLC(frameFrameRate, frameSampleRate, error);
+                    auto newAudioDataDLC = std::make_unique<IABAudioDataDLC>(frameFrameRate, frameSampleRate, error);
                     newAudioDataDLC->SetAudioDataID(channelAudioDataID);
-                    int32_t* muteSamples = new int32_t[dlcSampleCountList[frameFrameRate][frameSampleRate]]();
-                    newAudioDataDLC->EncodeMonoPCMToDLC(muteSamples, dlcSampleCountList[frameFrameRate][frameSampleRate]);
+                    int32_t* muteSamples = new int32_t[getDLCSampleCount(frameFrameRate, frameSampleRate)]();
+                    newAudioDataDLC->EncodeMonoPCMToDLC(muteSamples, getDLCSampleCount(frameFrameRate, frameSampleRate));
                     delete[] muteSamples;
                     if(error != kIABNoError) return error;
-                    currentAudioDataDLCIterator = oAudioDataDLCs.insert(currentAudioDataDLCIterator, newAudioDataDLC);
+                    currentAudioDataDLCIterator = oAudioDataDLCs.insert(currentAudioDataDLCIterator, std::move(newAudioDataDLC));
                     currentAudioDataDLCIterator ++;
                 }
                 else
                     return kValidateErrorAudioDataDLCDuplicateAudioDataID;
                 iBedDefinitionBedChannel->GetChannelGain(channelGain);
+                if(forceDolby && channelGain.getIABGainPrefix())
+                    channelGain.setIABGain(1);
                 iBedDefinitionBedChannel->GetDecorInfoExists(channelDecorInfoExists);
+                if(forceDolby) channelDecorInfoExists = 0;
 
                 oBedDefinitionBedChannel->SetChannelID(channelID);
                 oBedDefinitionBedChannel->SetAudioDataID(channelAudioDataID);
@@ -252,12 +269,12 @@ CineIA::iabError CineIA::reassembleIAB(std::istream *iInputStream, std::vector<c
             oBedDefinition->SetBedChannels(oBedDefinitionBedChannels);
 
             // Add to output BedDefinitions vector
-            oBedDefinitions.push_back(oBedDefinition);
+            oBedDefinitions.push_back(std::move(oBedDefinition));
         }
         // Copy ObjectDefinition element
         else if(IABObjectDefinition* iObjectDefinition = dynamic_cast<IABObjectDefinition*>(iSubElement)) {
             // Build output ObjectDefinition element
-            IABObjectDefinition* oObjectDefinition = new IABObjectDefinition(frameFrameRate);
+            auto oObjectDefinition = std::make_unique<IABObjectDefinition>(frameFrameRate);
 
             // Copy necessary ObjectDefinition settings and modify AudioDataID = 0
             IABMetadataIDType objectDefinitionMetaID = objectDefinitionMetaIDCounter ++;
@@ -271,18 +288,20 @@ CineIA::iabError CineIA::reassembleIAB(std::istream *iInputStream, std::vector<c
             }
             else if(objectDefinitionAudioDataID == 0) {
                 objectDefinitionAudioDataID = objectDefinitionAudioDataIDCounter ++;
-                IABAudioDataDLC* newAudioDataDLC = new IABAudioDataDLC(frameFrameRate, frameSampleRate, error);
+                auto newAudioDataDLC = std::make_unique<IABAudioDataDLC>(frameFrameRate, frameSampleRate, error);
                 newAudioDataDLC->SetAudioDataID(objectDefinitionAudioDataID);
-                int32_t* muteSamples = new int32_t[dlcSampleCountList[frameFrameRate][frameSampleRate]]();
-                newAudioDataDLC->EncodeMonoPCMToDLC(muteSamples, dlcSampleCountList[frameFrameRate][frameSampleRate]);
+                int32_t* muteSamples = new int32_t[getDLCSampleCount(frameFrameRate, frameSampleRate)]();
+                newAudioDataDLC->EncodeMonoPCMToDLC(muteSamples, getDLCSampleCount(frameFrameRate, frameSampleRate));
                 delete[] muteSamples;
                 if(error != kIABNoError) return error;
-                oAudioDataDLCs.push_back(newAudioDataDLC);
+                oAudioDataDLCs.push_back(std::move(newAudioDataDLC));
             }
             else
                 return kValidateErrorAudioDataDLCDuplicateAudioDataID;
             iObjectDefinition->GetConditionalObject(objectDefinitionIsConditionalObject);
+            if (forceDolby) objectDefinitionIsConditionalObject = 1;
             iObjectDefinition->GetObjectUseCase(objectDefinitionObjectUseCase);
+            if (forceDolby) objectDefinitionObjectUseCase = kIABUseCase_Always;
 
             oObjectDefinition->SetMetadataID(objectDefinitionMetaID);
             oObjectDefinition->SetAudioDataID(objectDefinitionAudioDataID);
@@ -318,298 +337,13 @@ CineIA::iabError CineIA::reassembleIAB(std::istream *iInputStream, std::vector<c
                 IABDecorCoeff panSubBlockDecorCoeff;
 
                 iObjectDefinitionPanSubBlock->GetObjectGain(panSubBlockObjectGain);
-                iObjectDefinitionPanSubBlock->GetObjectPositionToUnitCube(panSubBlockObjectPosition);
-                iObjectDefinitionPanSubBlock->GetObjectSnap(panSubBlockObjectSnap);
-                iObjectDefinitionPanSubBlock->GetObjectZoneGains9(panSubBlockObjectZoneGain9);
-                iObjectDefinitionPanSubBlock->GetObjectSpread(panSubBlockObjectSpread);
-                iObjectDefinitionPanSubBlock->GetDecorCoef(panSubBlockDecorCoeff);
-
-                oObjectDefinitionPanSubBlock->SetObjectGain(panSubBlockObjectGain);
-                oObjectDefinitionPanSubBlock->SetObjectPositionFromUnitCube(panSubBlockObjectPosition);
-                oObjectDefinitionPanSubBlock->SetObjectSnap(panSubBlockObjectSnap);
-                oObjectDefinitionPanSubBlock->SetObjectZoneGains9(panSubBlockObjectZoneGain9);
-                oObjectDefinitionPanSubBlock->SetObjectSpread(panSubBlockObjectSpread);
-                oObjectDefinitionPanSubBlock->SetDecorCoef(panSubBlockDecorCoeff);
-
-                // Add to output PanSubBlock vector
-                oObjectDefinitionPanSubBlocks.push_back(oObjectDefinitionPanSubBlock);
-            }
-
-            oObjectDefinition->SetPanSubBlocks(oObjectDefinitionPanSubBlocks);
-
-            // Add to output ObjectDefinitions vector
-            oObjectDefinitions.push_back(oObjectDefinition);
-        }
-        else
-            return kValidateErrorIAFrameUndefinedElementType;
-    }
-
-    // Assemble output subelements vector
-    size_t subElementsVectorSize = oAudioDataDLCs.size() + oBedDefinitions.size() + oObjectDefinitions.size();
-    oSubElements.reserve(subElementsVectorSize);
-
-    oSubElements.insert(oSubElements.end(), std::make_move_iterator(oAudioDataDLCs.begin()), std::make_move_iterator(oAudioDataDLCs.end()));
-    oSubElements.insert(oSubElements.end(), std::make_move_iterator(oBedDefinitions.begin()), std::make_move_iterator(oBedDefinitions.end()));
-    oSubElements.insert(oSubElements.end(), std::make_move_iterator(oObjectDefinitions.begin()), std::make_move_iterator(oObjectDefinitions.end()));
-
-    // Write subelements to DCP IABFrame
-    oIABFrame->SetSubElements(oSubElements);
-
-    // Pack DCP IABFrame and output
-    packer->PackIABFrame();
-    packer->GetPackedBuffer(oOutputBuffer, oOutputLength);
-
-    // Free memory
-    delete iIABFrame;
-    iIABFrame = nullptr;
-    delete parser;
-    parser = nullptr;
-    delete packer;
-    packer = nullptr;
-
-    return kIABNoError;
-}
-
-CineIA::iabError CineIA::reassembleIABDolby(std::istream *iInputStream, std::vector<char> &oOutputBuffer, uint32_t &oOutputLength) {
-    // Error variable
-    iabError error = kIABNoError;
-
-    // Build IMF parser and DCP packer
-    IABParser* parser = new IABParser(iInputStream);
-    IABPacker* packer = new IABPacker();
-
-    // Build IMF IABFrame and DCP IABFrame pointer
-    IABFrameInterface* iIABFrame;
-    IABFrameInterface* oIABFrame;
-
-    // Parse and get IMF IABFrame
-    parser->ParseIABFrame();
-    parser->GetIABFrameReleased(iIABFrame);
-
-    // Get DCP IABFrame
-    packer->GetIABFrame(oIABFrame);
-
-    // Copy necessary IABFrame settings
-    IABVersionNumberType frameVersion;
-    IABSampleRateType frameSampleRate;
-    IABBitDepthType frameBitDepth;
-    IABFrameRateType frameFrameRate;
-    IABMaxRenderedRangeType frameMaxRendered;
-
-    iIABFrame->GetVersion(frameVersion);
-    iIABFrame->GetSampleRate(frameSampleRate);
-    iIABFrame->GetBitDepth(frameBitDepth);
-    iIABFrame->GetFrameRate(frameFrameRate);
-    iIABFrame->GetMaxRendered(frameMaxRendered);
-
-    oIABFrame->SetVersion(1);
-    oIABFrame->SetSampleRate(frameSampleRate);
-    oIABFrame->SetBitDepth(frameBitDepth);
-    oIABFrame->SetFrameRate(frameFrameRate);
-    oIABFrame->SetMaxRendered(frameMaxRendered);
-
-    // Parse and copy subelements
-    std::vector<IABElement*> iSubElements;
-    std::vector<IABElement*> oSubElements;
-
-    std::vector<IABAudioDataDLC*> oAudioDataDLCs;
-    std::vector<IABBedDefinition*> oBedDefinitions;
-    std::vector<IABObjectDefinition*> oObjectDefinitions;
-
-    iIABFrame->GetSubElements(iSubElements);
-
-    /*
-     * IAB Application Profile 1's constraint requires ObjectDefinition's MetaID to begin from 1.
-     * So we have to keep a counter to edit ObjectDefinition's MetaID in an order.
-     */
-    IABMetadataIDType objectDefinitionMetaIDCounter = 1;
-
-    /*
-     * In a real IAB Application Profile 1 bitstream, there will not appear AudioDataID = 0.
-     * So we have to fill those elements which uses AudioDataID = 0 with Audio data that has no sound.
-     * The following two variables are used to store a counter to mark which AudioDataID the current element should use.
-     */
-    IABAudioDataIDType bedDefinitionBedChannelAudioDataIDCounter = 100;
-    IABAudioDataIDType objectDefinitionAudioDataIDCounter = 300;
-    std::vector<IABAudioDataDLC*>::iterator currentAudioDataDLCIterator;
-
-    for(IABElement* iSubElement : iSubElements) {
-        // Copy AudioData elements
-        if(IABAudioDataPCM* iAudioDataPCM = dynamic_cast<IABAudioDataPCM*>(iSubElement)) {
-            // Copy necessary AudioData settings
-            IABFrameRateType audioDataFrameRate;
-            IABSampleRateType audioDataSampleRate;
-            IABAudioDataIDType audioDataID;
-            audioDataFrameRate = iAudioDataPCM->GetPCMFrameRate();
-            audioDataSampleRate = iAudioDataPCM->GetPCMSampleRate();
-            iAudioDataPCM->GetAudioDataID(audioDataID);
-
-            // Build output AudioDataDLC element and set settings
-            IABAudioDataDLC* oAudioDataDLC = new IABAudioDataDLC(audioDataFrameRate, audioDataSampleRate, error);
-            if(error != kIABNoError) return error;
-            oAudioDataDLC->SetAudioDataID(audioDataID);
-
-            // Encode DLC audio
-            uint32_t audioDataPCMSampleCount = iAudioDataPCM->GetPCMSampleCount();
-            int32_t* audioDataPCMSamples = new int32_t[audioDataPCMSampleCount];
-            iAudioDataPCM->UnpackPCMToMonoSamples(audioDataPCMSamples, audioDataPCMSampleCount);
-            oAudioDataDLC->EncodeMonoPCMToDLC(audioDataPCMSamples, audioDataPCMSampleCount);
-            delete[] audioDataPCMSamples;
-            audioDataPCMSamples = nullptr;
-
-            // Add to output AudioDataDLCs vector
-            oAudioDataDLCs.push_back(oAudioDataDLC);
-        }
-            // Copy BedDefinition Element
-        else if(IABBedDefinition* iBedDefinition = dynamic_cast<IABBedDefinition*>(iSubElement)) {
-            // Initialize oAudioDataDLC iterator
-            currentAudioDataDLCIterator = oAudioDataDLCs.begin();
-
-            // Build output BedDefinition element
-            IABBedDefinition* oBedDefinition = new IABBedDefinition(frameFrameRate);
-
-            // Copy necessary BedDefinition settings
-            IABMetadataIDType bedDefinitionMetaID = 0;  // * IAB Application Profile 1's constraint limits BedDefinition's MetaID to 0.
-            uint1_t bedDefinitionIsConditionalBed;
-            IABUseCaseType bedDefinitionBedUseCase;
-
-            iBedDefinition->GetConditionalBed(bedDefinitionIsConditionalBed);
-            bedDefinitionIsConditionalBed = 0;
-            iBedDefinition->GetBedUseCase(bedDefinitionBedUseCase);
-
-            oBedDefinition->SetMetadataID(bedDefinitionMetaID);
-            oBedDefinition->SetConditionalBed(bedDefinitionIsConditionalBed);
-
-            // Copy bed channels
-            std::vector<IABChannel*> iBedDefinitionBedChannels;
-            std::vector<IABChannel*> oBedDefinitionBedChannels;
-
-            iBedDefinition->GetBedChannels(iBedDefinitionBedChannels);
-
-            for(IABChannel* iBedDefinitionBedChannel : iBedDefinitionBedChannels) {
-
-                // Build output channel
-                IABChannel* oBedDefinitionBedChannel = new IABChannel();
-
-                // Copy necessary channel settings and modify AudioDataID = 0
-                IABChannelIDType channelID;
-                IABAudioDataIDType channelAudioDataID;
-                IABGain channelGain;
-                uint1_t channelDecorInfoExists;
-
-                iBedDefinitionBedChannel->GetChannelID(channelID);
-                iBedDefinitionBedChannel->GetAudioDataID(channelAudioDataID);
-                if(channelAudioDataID == bedDefinitionBedChannelAudioDataIDCounter) {
-                    bedDefinitionBedChannelAudioDataIDCounter ++;
-                    currentAudioDataDLCIterator ++;
-                }
-                else if(channelAudioDataID == 0) {
-                    channelAudioDataID = bedDefinitionBedChannelAudioDataIDCounter ++;
-                    IABAudioDataDLC* newAudioDataDLC = new IABAudioDataDLC(frameFrameRate, frameSampleRate, error);
-                    newAudioDataDLC->SetAudioDataID(channelAudioDataID);
-                    int32_t* muteSamples = new int32_t[dlcSampleCountList[frameFrameRate][frameSampleRate]]();
-                    newAudioDataDLC->EncodeMonoPCMToDLC(muteSamples, dlcSampleCountList[frameFrameRate][frameSampleRate]);
-                    delete[] muteSamples;
-                    if(error != kIABNoError) return error;
-                    currentAudioDataDLCIterator = oAudioDataDLCs.insert(currentAudioDataDLCIterator, newAudioDataDLC);
-                    currentAudioDataDLCIterator ++;
-                }
-                else
-                    return kValidateErrorAudioDataDLCDuplicateAudioDataID;
-                iBedDefinitionBedChannel->GetChannelGain(channelGain);
-                if(channelGain.getIABGainPrefix())
-                    channelGain.setIABGain(1);
-                iBedDefinitionBedChannel->GetDecorInfoExists(channelDecorInfoExists);
-                channelDecorInfoExists = 0;
-
-                oBedDefinitionBedChannel->SetChannelID(channelID);
-                oBedDefinitionBedChannel->SetAudioDataID(channelAudioDataID);
-                oBedDefinitionBedChannel->SetChannelGain(channelGain);
-                oBedDefinitionBedChannel->SetDecorInfoExists(channelDecorInfoExists);
-
-                // Add to output channel vector
-                oBedDefinitionBedChannels.push_back(oBedDefinitionBedChannel);
-            }
-
-            oBedDefinition->SetBedChannels(oBedDefinitionBedChannels);
-
-            // Add to output BedDefinitions vector
-            oBedDefinitions.push_back(oBedDefinition);
-        }
-            // Copy ObjectDefinition element
-        else if(IABObjectDefinition* iObjectDefinition = dynamic_cast<IABObjectDefinition*>(iSubElement)) {
-            // Build output ObjectDefinition element
-            IABObjectDefinition* oObjectDefinition = new IABObjectDefinition(frameFrameRate);
-
-            // Copy necessary ObjectDefinition settings and modify AudioDataID = 0
-            IABMetadataIDType objectDefinitionMetaID = objectDefinitionMetaIDCounter ++;
-            IABAudioDataIDType objectDefinitionAudioDataID;
-            uint1_t objectDefinitionIsConditionalObject;
-            IABUseCaseType objectDefinitionObjectUseCase;
-
-            iObjectDefinition->GetAudioDataID(objectDefinitionAudioDataID);
-            if(objectDefinitionAudioDataID == objectDefinitionAudioDataIDCounter) {
-                objectDefinitionAudioDataIDCounter ++;
-            }
-            else if(objectDefinitionAudioDataID == 0) {
-                objectDefinitionAudioDataID = objectDefinitionAudioDataIDCounter ++;
-                IABAudioDataDLC* newAudioDataDLC = new IABAudioDataDLC(frameFrameRate, frameSampleRate, error);
-                newAudioDataDLC->SetAudioDataID(objectDefinitionAudioDataID);
-                int32_t* muteSamples = new int32_t[dlcSampleCountList[frameFrameRate][frameSampleRate]]();
-                newAudioDataDLC->EncodeMonoPCMToDLC(muteSamples, dlcSampleCountList[frameFrameRate][frameSampleRate]);
-                delete[] muteSamples;
-                if(error != kIABNoError) return error;
-                oAudioDataDLCs.push_back(newAudioDataDLC);
-            }
-            else
-                return kValidateErrorAudioDataDLCDuplicateAudioDataID;
-            // The following 11 bits will be 0x7FE
-            iObjectDefinition->GetConditionalObject(objectDefinitionIsConditionalObject);
-            objectDefinitionIsConditionalObject = 1;
-            iObjectDefinition->GetObjectUseCase(objectDefinitionObjectUseCase);
-            objectDefinitionObjectUseCase = kIABUseCase_Always;
-
-            oObjectDefinition->SetMetadataID(objectDefinitionMetaID);
-            oObjectDefinition->SetAudioDataID(objectDefinitionAudioDataID);
-            oObjectDefinition->SetConditionalObject(objectDefinitionIsConditionalObject);
-            oObjectDefinition->SetObjectUseCase(objectDefinitionObjectUseCase);
-
-            // Copy object PanSubBlocks
-            std::vector<IABObjectSubBlock*> iObjectDefinitionPanSubBlocks;
-            std::vector<IABObjectSubBlock*> oObjectDefinitionPanSubBlocks;
-
-            iObjectDefinition->GetPanSubBlocks(iObjectDefinitionPanSubBlocks);
-
-            for(IABObjectSubBlock* iObjectDefinitionPanSubBlock : iObjectDefinitionPanSubBlocks) {
-                // Build output PanSubBlock
-                IABObjectSubBlock* oObjectDefinitionPanSubBlock = new IABObjectSubBlock();
-
-                // Copy necessary PanSubBlock settings
-                uint1_t panSubBlockPanInfoExists;
-                iObjectDefinitionPanSubBlock->GetPanInfoExists(panSubBlockPanInfoExists);
-                if(!panSubBlockPanInfoExists) {
-                    oObjectDefinitionPanSubBlock->SetPanInfoExists(panSubBlockPanInfoExists);
-                    oObjectDefinitionPanSubBlocks.push_back(oObjectDefinitionPanSubBlock);
-                    continue;
-                }
-                oObjectDefinitionPanSubBlock->SetPanInfoExists(panSubBlockPanInfoExists);
-
-                // Copy necessary ObjectDefinition PanSubBlock settings
-                IABGain panSubBlockObjectGain;
-                CartesianPosInUnitCube panSubBlockObjectPosition;
-                IABObjectSnap panSubBlockObjectSnap;
-                IABObjectZoneGain9 panSubBlockObjectZoneGain9;
-                IABObjectSpread panSubBlockObjectSpread;
-                IABDecorCoeff panSubBlockDecorCoeff;
-
-                iObjectDefinitionPanSubBlock->GetObjectGain(panSubBlockObjectGain);
-                if(panSubBlockObjectGain.getIABGainPrefix())
+                if(forceDolby && panSubBlockObjectGain.getIABGainPrefix())
                     panSubBlockObjectGain.setIABGain(1);
                 iObjectDefinitionPanSubBlock->GetObjectPositionToUnitCube(panSubBlockObjectPosition);
                 iObjectDefinitionPanSubBlock->GetObjectSnap(panSubBlockObjectSnap);
                 iObjectDefinitionPanSubBlock->GetObjectZoneGains9(panSubBlockObjectZoneGain9);
                 iObjectDefinitionPanSubBlock->GetObjectSpread(panSubBlockObjectSpread);
-                if(panSubBlockObjectSpread.getIABObjectSpreadMode() != 0 && panSubBlockObjectSpread.getIABObjectSpreadMode() != 2)
+                if(forceDolby && panSubBlockObjectSpread.getIABObjectSpreadMode() != 0 && panSubBlockObjectSpread.getIABObjectSpreadMode() != 2)
                     return kIABPackerObjectSpreadModeError;
                 iObjectDefinitionPanSubBlock->GetDecorCoef(panSubBlockDecorCoeff);
 
@@ -627,38 +361,38 @@ CineIA::iabError CineIA::reassembleIABDolby(std::istream *iInputStream, std::vec
             oObjectDefinition->SetPanSubBlocks(oObjectDefinitionPanSubBlocks);
 
             // Add to output ObjectDefinitions vector
-            oObjectDefinitions.push_back(oObjectDefinition);
+            oObjectDefinitions.push_back(std::move(oObjectDefinition));
         }
         else
             return kValidateErrorIAFrameUndefinedElementType;
     }
 
-    // Assemble output subelements vector
+    // Assemble output subelements vector (release ownership to IABFrame)
     size_t subElementsVectorSize = oAudioDataDLCs.size() + oBedDefinitions.size() + oObjectDefinitions.size();
     oSubElements.reserve(subElementsVectorSize);
 
-    oSubElements.insert(oSubElements.end(), std::make_move_iterator(oAudioDataDLCs.begin()), std::make_move_iterator(oAudioDataDLCs.end()));
-    oSubElements.insert(oSubElements.end(), std::make_move_iterator(oBedDefinitions.begin()), std::make_move_iterator(oBedDefinitions.end()));
-    oSubElements.insert(oSubElements.end(), std::make_move_iterator(oObjectDefinitions.begin()), std::make_move_iterator(oObjectDefinitions.end()));
+    for (auto& p : oAudioDataDLCs) oSubElements.push_back(p.release());
+    for (auto& p : oBedDefinitions) oSubElements.push_back(p.release());
+    for (auto& p : oObjectDefinitions) oSubElements.push_back(p.release());
 
     // Write subelements to DCP IABFrame
     oIABFrame->SetSubElements(oSubElements);
 
-    // Pack DCP IABFrame and output
+    // Pack DCP IABFrame and output (unique_ptrs auto-cleanup on scope exit)
     packer->PackIABFrame();
     packer->GetPackedBuffer(oOutputBuffer, oOutputLength);
-
-    // Free memory
-    delete iIABFrame;
-    iIABFrame = nullptr;
-    delete parser;
-    parser = nullptr;
-    delete packer;
-    packer = nullptr;
 
     return kIABNoError;
 }
 
+// Public wrappers
+CineIA::iabError CineIA::reassembleIAB(std::istream *iInputStream, std::vector<char> &oOutputBuffer, uint32_t &oOutputLength) {
+    return ::reassembleIABCore(iInputStream, oOutputBuffer, oOutputLength, false);
+}
+
+CineIA::iabError CineIA::reassembleIABDolby(std::istream *iInputStream, std::vector<char> &oOutputBuffer, uint32_t &oOutputLength) {
+    return ::reassembleIABCore(iInputStream, oOutputBuffer, oOutputLength, true);
+}
 
 uint32_t reverseBytes(uint32_t value) {
     return ((value >> 24) & 0x000000FF) |
@@ -668,7 +402,6 @@ uint32_t reverseBytes(uint32_t value) {
 }
 
 void CineIA::copyPreambleValue(std::istream *iIMFBuffer, std::vector<char> &ioOutputBuffer, uint32_t &ioOutputLength) {
-    // Copy PreambleLength
     uint32_t preambleLength;
     iIMFBuffer->seekg(1, std::ios::beg);
     iIMFBuffer->read(reinterpret_cast<char*>(&preambleLength), 4);
@@ -684,10 +417,12 @@ void CineIA::copyPreambleValue(std::istream *iIMFBuffer, std::vector<char> &ioOu
     ioOutputLength += preambleLength;
 }
 
+// Convert IABFrameRateType to integer fps.
+// NOTE: 23.976fps is approximated as 23 (caller should handle NTSC rates separately).
 int CineIA::convertFrameRate(IABFrameRateType iFrameRate) {
     switch(iFrameRate) {
         case kIABFrameRate_23_976FPS:
-            return 23;
+            return 23;  // Approximate: actual is 24000/1001
         case kIABFrameRate_24FPS:
             return 24;
         case kIABFrameRate_25FPS:
@@ -709,7 +444,6 @@ int CineIA::convertFrameRate(IABFrameRateType iFrameRate) {
         default:
             return 0;
     }
-    return 0;
 }
 
 int CineIA::convertSampleRate(IABSampleRateType iSampleRate) {
@@ -721,7 +455,6 @@ int CineIA::convertSampleRate(IABSampleRateType iSampleRate) {
         default:
             return 0;
     }
-    return 0;
 }
 
 int CineIA::convertBitDepth(IABBitDepthType iBitDepth) {
@@ -733,5 +466,4 @@ int CineIA::convertBitDepth(IABBitDepthType iBitDepth) {
         default:
             return 0;
     }
-    return 0;
 }
