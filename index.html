@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
     <title>CineIA GUI</title>
     <link rel="stylesheet" href="styles.css">
 </head>
@@ -26,14 +27,12 @@
                 </svg>
                 <span>CineIA GUI</span>
             </div>
-            <div style="display: flex; gap: 15px; align-items: center;">
+            <div class="header-actions">
                 <div class="status-indicator" data-i18n="status-ready">Ready</div>
-                <button id="btn-lang" class="btn text-only"
-                    style="padding: 4px 8px; font-size: 12px; font-weight: 600;">EN</button>
-                <button id="btn-help" class="btn text-only" style="padding: 4px 8px; font-size: 12px; font-weight: 600;"
-                    data-i18n="btn-help">说明</button>
-                <button id="btn-license" class="btn text-only"
-                    style="padding: 4px 8px; font-size: 12px; font-weight: 600;" data-i18n="btn-license">版权</button>
+                <button id="btn-lang" class="btn text-only header-btn">EN</button>
+                <button id="btn-settings" class="btn text-only header-btn" data-i18n="btn-settings">设置</button>
+                <button id="btn-help" class="btn text-only header-btn" data-i18n="btn-help">说明</button>
+                <button id="btn-license" class="btn text-only header-btn" data-i18n="btn-license">版权</button>
             </div>
         </header>
 
